@@ -6,9 +6,6 @@
 	objectVersion = 77;
 	objects = {
 
-/* Begin PBXBuildFile section */
-/* End PBXBuildFile section */
-
 /* Begin PBXFileReference section */
 		6CD2F9F92F93E29600FFDCF0 /* Three Finger Salute.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Three Finger Salute.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */

@@ -23,6 +23,7 @@ struct OnboardingView: View {
             VStack(alignment: .leading, spacing: 15) {
                 FeatureRow(icon: "speaker.wave.3.fill", title: "Volume Swipe", description: "Three-finger vertical swipe to change volume instantly.")
                 FeatureRow(icon: "computermouse", title: "Middle Click", description: "Three-finger tap or physical click to trigger a middle click.")
+                FeatureRow(icon: "hand.tap.fill", title: "Trackpad Optimization", description: "Optionally disable conflicting system gestures (Mission Control, etc.) during setup.")
             }
             .padding()
             .background(Color.secondary.opacity(0.1))
@@ -37,6 +38,9 @@ struct OnboardingView: View {
                         .font(.headline)
                     
                     Button("Get Started") {
+                        if !SystemSettingsManager.shared.areGesturesDisabled {
+                            SystemSettingsManager.shared.optimizeSettings()
+                        }
                         NSApp.keyWindow?.close()
                     }
                     .buttonStyle(.borderedProminent)

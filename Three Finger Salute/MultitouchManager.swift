@@ -20,6 +20,7 @@ typealias MTDeviceCreateListFunc = @convention(c) () -> CFArray?
 typealias MTRegisterContactFrameCallbackFunc = @convention(c) (UnsafeMutableRawPointer, MTContactCallback) -> Void
 typealias MTDeviceStartFunc = @convention(c) (UnsafeMutableRawPointer, Int32) -> Void
 typealias MTDeviceStopFunc = @convention(c) (UnsafeMutableRawPointer) -> Void
+typealias MTDeviceSetPropertyFunc = @convention(c) (UnsafeMutableRawPointer, Int32, CFTypeRef) -> Void
 
 protocol MultitouchDelegate: AnyObject {
     func didUpdateTouches(_ touches: [MTContact])
@@ -36,6 +37,7 @@ class MultitouchManager {
     private var mtRegisterContactFrameCallback: MTRegisterContactFrameCallbackFunc?
     private var mtDeviceStart: MTDeviceStartFunc?
     private var mtDeviceStop: MTDeviceStopFunc?
+    private var mtDeviceSetProperty: MTDeviceSetPropertyFunc?
     
     private init() {
         loadFramework()
@@ -49,6 +51,7 @@ class MultitouchManager {
         mtRegisterContactFrameCallback = unsafeBitCast(dlsym(handle, "MTRegisterContactFrameCallback"), to: MTRegisterContactFrameCallbackFunc?.self)
         mtDeviceStart = unsafeBitCast(dlsym(handle, "MTDeviceStart"), to: MTDeviceStartFunc?.self)
         mtDeviceStop = unsafeBitCast(dlsym(handle, "MTDeviceStop"), to: MTDeviceStopFunc?.self)
+        mtDeviceSetProperty = unsafeBitCast(dlsym(handle, "MTDeviceSetProperty"), to: MTDeviceSetPropertyFunc?.self)
     }
     
     func start() {
@@ -118,5 +121,14 @@ class MultitouchManager {
         print("MultitouchManager: Restarting...")
         stop()
         start()
+    }
+    
+    func setExclusiveMode(_ enabled: Bool) {
+        guard let setProperty = mtDeviceSetProperty else { return }
+        let value = enabled ? kCFBooleanTrue : kCFBooleanFalse
+        for dev in devices {
+            setProperty(dev, 142, value!)
+        }
+        print("MultitouchManager: Exclusive mode \(enabled ? "enabled" : "disabled")")
     }
 }

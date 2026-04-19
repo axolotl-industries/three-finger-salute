@@ -2,6 +2,8 @@
 import SwiftUI
 
 struct ContentView: View {
+    @StateObject private var settings = SystemSettingsManager.shared
+    
     var body: some View {
         VStack(spacing: 20) {
             Image(systemName: "3.circle.fill")
@@ -21,13 +23,30 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 10) {
                 Label("Status: Running", systemImage: "checkmark.circle.fill")
                     .foregroundColor(.green)
-                Label("Menu Bar icon is active", systemImage: "menubar.arrow.up.rectangle")
+                
+                if settings.areGesturesDisabled {
+                    Label("Trackpad Optimized", systemImage: "hand.tap.fill")
+                        .foregroundColor(.blue)
+                } else {
+                    Label("Trackpad Optimization Recommended", systemImage: "exclamationmark.triangle.fill")
+                        .foregroundColor(.orange)
+                    
+                    Text("The OS's three-finger swipe gestures may conflict with this app. Would you like to automatically disable them?")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    
+                    Button("Optimize Trackpad Settings") {
+                        settings.optimizeSettings()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                }
             }
             .padding()
             .background(Color.secondary.opacity(0.1))
             .cornerRadius(10)
         }
         .padding(40)
-        .frame(width: 400, height: 320)
+        .frame(width: 400, height: 420)
     }
 }

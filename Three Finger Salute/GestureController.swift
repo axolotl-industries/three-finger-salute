@@ -64,6 +64,7 @@ class GestureController: MultitouchDelegate {
             if GestureController.shared.isTracking && Date().timeIntervalSince(GestureController.shared.lastTouchUpdate) > 0.15 {
                 print("GESTURE: Watchdog reset isTracking (stale touches)")
                 GestureController.shared.isTracking = false
+                MultitouchManager.shared.setExclusiveMode(false)
             }
 
             // If we have 3 fingers on the trackpad, we take control of all clicks
@@ -140,6 +141,7 @@ class GestureController: MultitouchDelegate {
             
             if !isTracking {
                 isTracking = true
+                MultitouchManager.shared.setExclusiveMode(true) // Attempt to suppress OS gestures
                 touchStartTime = Date()
                 startY = averageY
                 initialVolume = VolumeManager.shared.getVolume()
@@ -178,6 +180,7 @@ class GestureController: MultitouchDelegate {
             }
             
             isTracking = false
+            MultitouchManager.shared.setExclusiveMode(false)
             touchStartTime = nil
             
         } else {
@@ -186,6 +189,7 @@ class GestureController: MultitouchDelegate {
             if isTracking {
                 print("GESTURE: 3 Fingers reduced to \(activeTouches.count) (Graceful transition)")
                 isTracking = false
+                MultitouchManager.shared.setExclusiveMode(false)
             }
             
             // If they move significantly with fewer than 3 fingers, it's definitely not a tap anymore.
