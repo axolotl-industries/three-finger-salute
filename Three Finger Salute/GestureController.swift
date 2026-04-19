@@ -131,12 +131,8 @@ class GestureController: MultitouchDelegate {
         
         if activeTouches.count == 3 {
             // Palm rejection: 3-finger gestures should be relatively bunched together.
-            // A typical 3-finger cluster is usually < 0.4 of trackpad width.
-            // We'll use 0.5 to be safe and avoid blocking legitimate taps.
             let maxDist = calculateMaxDistance(activeTouches)
             if maxDist > 0.5 {
-                // If we were already tracking, we can continue, but don't start a NEW track
-                // if the fingers are too spread out (likely a palm + 2 fingers).
                 if !isTracking { return }
             }
 
@@ -153,28 +149,24 @@ class GestureController: MultitouchDelegate {
             }
             
             let deltaY = averageY - startY
-            if abs(deltaY) > 0.05 { // Restored to 0.05 to prevent accidental swipe detection during tap
+            if abs(deltaY) > 0.05 { 
                 hasMovedSignificantly = true
             }
 
             let isVolumeEnabled = UserDefaults.standard.object(forKey: "isVolumeSwipeEnabled") == nil ? true : UserDefaults.standard.bool(forKey: "isVolumeSwipeEnabled")
 
             if hasMovedSignificantly && isVolumeEnabled {
-                // Sensitivity: how much trackpad movement equals full volume range.
                 let userSensitivity = UserDefaults.standard.double(forKey: "swipeSensitivity")
                 let sensitivity = Float(userSensitivity == 0 ? 1.2 : userSensitivity)
                 let newVolume = initialVolume + (deltaY * sensitivity)
                 VolumeManager.shared.setVolume(newVolume)
             }
 
-        } else if isTracking {
-            // Reset tracking whenever count is not exactly 3.
-            
-            // Check for middle click tap only when count drops to 0.
-            if activeTouches.count == 0 {
+        } else if activeTouches.count == 0 {
+            // All fingers lifted. Check for tap.
+            if isTracking || touchStartTime != nil {
                 let isMiddleClickEnabled = UserDefaults.standard.object(forKey: "isMiddleClickEnabled") == nil ? true : UserDefaults.standard.bool(forKey: "isMiddleClickEnabled")
 
-                // Trigger tap-middle-click ONLY if we haven't already physically clicked
                 if !hasPhysicallyClicked,
                    isMiddleClickEnabled,
                    let startTime = touchStartTime, 
@@ -182,13 +174,27 @@ class GestureController: MultitouchDelegate {
                    !hasMovedSignificantly {
                     triggerMiddleClick()
                 }
-                print("GESTURE: 3 Fingers Up (Clean)")
-            } else {
-                print("GESTURE: 3 Fingers Interrupted (count: \(activeTouches.count))")
+                print("GESTURE: All Fingers Up")
             }
             
             isTracking = false
             touchStartTime = nil
+            
+        } else {
+            // 1 or 2 fingers down.
+            // STOP blocking system events immediately to avoid input lag/blocking.
+            if isTracking {
+                print("GESTURE: 3 Fingers reduced to \(activeTouches.count) (Graceful transition)")
+                isTracking = false
+            }
+            
+            // If they move significantly with fewer than 3 fingers, it's definitely not a tap anymore.
+            // Also invalidate if they hold the remaining fingers too long.
+            if let startTime = touchStartTime {
+                if Date().timeIntervalSince(startTime) > 0.3 {
+                    touchStartTime = nil
+                }
+            }
         }
     }
     
