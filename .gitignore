@@ -1,0 +1,7 @@
+build/
+*.app
+*.dSYM
+*.zip
+*.swiftmodule
+.DS_Store
+.gemini/
