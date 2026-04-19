@@ -9,4 +9,8 @@ This app does two things:
 
 That's all.
 
+To install via homebrew:
+
+brew install --cask axolotl-industries/tap/three-finger-salute 
+
 If that's worth money to you, give me some. Donation link is in the settings page.
