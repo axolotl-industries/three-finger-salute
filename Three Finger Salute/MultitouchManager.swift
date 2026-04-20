@@ -39,6 +39,8 @@ class MultitouchManager {
     private var mtDeviceStop: MTDeviceStopFunc?
     private var mtDeviceSetProperty: MTDeviceSetPropertyFunc?
     
+    private var isSearching = false
+    
     private init() {
         loadFramework()
     }
@@ -55,7 +57,14 @@ class MultitouchManager {
     }
     
     func start() {
-        guard !isStarted, let register = mtRegisterContactFrameCallback, let start = mtDeviceStart else { return }
+        if isStarted || isSearching { return }
+        isSearching = true
+        start(retryCount: 0)
+    }
+
+    private func start(retryCount: Int) {
+        // If someone else stopped it while we were waiting for retry, or we already started
+        guard isSearching && !isStarted, let register = mtRegisterContactFrameCallback, let start = mtDeviceStart else { return }
 
         var deviceList: [UnsafeMutableRawPointer] = []
 
@@ -69,14 +78,20 @@ class MultitouchManager {
             }
         }
 
-
         // Fallback to default if list is empty
         if deviceList.isEmpty, let dev = mtDeviceCreateDefault?() {
             deviceList.append(dev)
         }
 
         guard !deviceList.isEmpty else {
-            print("MultitouchManager: No multitouch devices found")
+            print("MultitouchManager: No multitouch devices found (retry: \(retryCount))")
+            if retryCount < 5 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                    self.start(retryCount: retryCount + 1)
+                }
+            } else {
+                isSearching = false
+            }
             return
         }
 
@@ -104,11 +119,13 @@ class MultitouchManager {
         }
 
         isStarted = true
+        isSearching = false
         print("MultitouchManager: Active with \(devices.count) device(s)")
     }
 
     
     func stop() {
+        isSearching = false
         guard isStarted, let stop = mtDeviceStop else { return }
         for dev in devices {
             stop(dev)

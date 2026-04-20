@@ -8,6 +8,7 @@ class GestureController: MultitouchDelegate {
     private var isTracking = false
     private var lastTouchUpdate = Date()
     private var eventTap: CFMachPort?
+    private var runLoopSource: CFRunLoopSource?
     
     // Middle click tracking
     private var touchStartTime: Date?
@@ -28,15 +29,21 @@ class GestureController: MultitouchDelegate {
 
     func restart() {
         print("GestureController: Restarting...")
-        if let tap = eventTap {
-            if !CGEvent.tapIsEnabled(tap: tap) {
-                print("GestureController: Re-enabling existing tap")
-                CGEvent.tapEnable(tap: tap, enable: true)
-            }
-        } else {
-            setupEventTap()
-        }
+        stopEventTap()
+        setupEventTap()
         MultitouchManager.shared.restart()
+    }
+
+    private func stopEventTap() {
+        if let tap = eventTap {
+            print("GestureController: Stopping event tap")
+            CGEvent.tapEnable(tap: tap, enable: false)
+            if let source = runLoopSource {
+                CFRunLoopRemoveSource(CFRunLoopGetCurrent(), source, .commonModes)
+            }
+            eventTap = nil
+            runLoopSource = nil
+        }
     }
 
     private func setupEventTap() {
@@ -107,8 +114,9 @@ class GestureController: MultitouchDelegate {
                                    userInfo: nil)
         
         if let tap = eventTap {
-            let runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-            CFRunLoopAddSource(CFRunLoopGetCurrent(), runLoopSource, .commonModes)
+            let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
+            self.runLoopSource = source
+            CFRunLoopAddSource(CFRunLoopGetCurrent(), source, .commonModes)
             CGEvent.tapEnable(tap: tap, enable: true)
         }
     }

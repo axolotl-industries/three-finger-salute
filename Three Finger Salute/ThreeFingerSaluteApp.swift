@@ -44,7 +44,7 @@ struct SettingsView: View {
                 Text("by Axolotl Industries")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                Text("Version 1.0.1")
+                Text("Version 1.0.3")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 
@@ -118,12 +118,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func setupSleepWakeObservers() {
-        NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.didWakeNotification,
-            object: nil,
-            queue: .main
-        ) { _ in
-            print("Three Finger Salute: System woke up, refreshing connections...")
+        let center = NSWorkspace.shared.notificationCenter
+        
+        center.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { _ in
+            print("Three Finger Salute: System woke up, refreshing connections in 2 seconds...")
+            // Delay restart to ensure hardware is fully available
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                GestureController.shared.restart()
+            }
+        }
+        
+        center.addObserver(forName: NSWorkspace.screensDidWakeNotification, object: nil, queue: .main) { _ in
+            print("Three Finger Salute: Screens woke up, ensuring connections...")
             GestureController.shared.restart()
         }
     }
