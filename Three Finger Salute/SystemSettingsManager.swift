@@ -4,104 +4,90 @@ import Combine
 
 class SystemSettingsManager: ObservableObject {
     static let shared = SystemSettingsManager()
-    
+
     @Published var areGesturesDisabled: Bool = false
-    
+
+    // Both per-app and global keys gate the trackpad swipe behavior. Writing
+    // each in its appropriate (host, user) scope and then bouncing Dock is
+    // enough — no need to spawn `defaults` or kill cfprefsd.
+    private static let perAppDomains = [
+        "com.apple.AppleMultitouchTrackpad",
+        "com.apple.driver.AppleBluetoothMultitouch.trackpad"
+    ]
+    private static let perAppKeys = [
+        "TrackpadThreeFingerVertSwipeGesture",
+        "TrackpadThreeFingerHorizSwipeGesture"
+    ]
+    private static let globalGestureKeys = [
+        "com.apple.trackpad.threeFingerVertSwipeGesture",
+        "com.apple.trackpad.threeFingerHorizSwipeGesture"
+    ]
+    private static let globalDomain = "NSGlobalDomain" as CFString
+
     private init() {
         checkStatus()
     }
-    
+
     func checkStatus() {
-        let process = Process()
-        process.launchPath = "/usr/bin/defaults"
-        process.arguments = ["-currentHost", "read", "NSGlobalDomain", "com.apple.trackpad.threeFingerVertSwipeGesture"]
-        
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = Pipe() // Silence errors
-        
-        process.launch()
-        process.waitUntilExit()
-        
-        if process.terminationStatus == 0 {
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            if let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) {
-                DispatchQueue.main.async {
-                    self.areGesturesDisabled = (output == "0")
-                }
-            }
-        } else {
-            DispatchQueue.main.async {
-                self.areGesturesDisabled = false
-            }
-        }
+        let value = CFPreferencesCopyValue(
+            Self.globalGestureKeys[0] as CFString,
+            Self.globalDomain,
+            kCFPreferencesCurrentUser,
+            kCFPreferencesCurrentHost
+        ) as? Int
+        let disabled = (value == 0)
+        DispatchQueue.main.async { self.areGesturesDisabled = disabled }
     }
-    
+
     func optimizeSettings() {
         print("SystemSettingsManager: Optimizing trackpad settings...")
-        
-        let commands = [
-            ["write", "com.apple.AppleMultitouchTrackpad", "TrackpadThreeFingerVertSwipeGesture", "-int", "0"],
-            ["write", "com.apple.AppleMultitouchTrackpad", "TrackpadThreeFingerHorizSwipeGesture", "-int", "0"],
-            ["write", "com.apple.driver.AppleBluetoothMultitouch.trackpad", "TrackpadThreeFingerVertSwipeGesture", "-int", "0"],
-            ["write", "com.apple.driver.AppleBluetoothMultitouch.trackpad", "TrackpadThreeFingerHorizSwipeGesture", "-int", "0"],
-            ["-currentHost", "write", "NSGlobalDomain", "com.apple.trackpad.threeFingerVertSwipeGesture", "-int", "0"],
-            ["-currentHost", "write", "NSGlobalDomain", "com.apple.trackpad.threeFingerHorizSwipeGesture", "-int", "0"],
-            ["write", "NSGlobalDomain", "AppleEnableSwipeNavigateWithScrolls", "-bool", "false"]
-        ]
-        
-        for args in commands {
-            let p = Process()
-            p.launchPath = "/usr/bin/defaults"
-            p.arguments = args
-            p.launch()
-            p.waitUntilExit()
-        }
-        
-        // Restart Dock to apply changes
-        let killDock = Process()
-        killDock.launchPath = "/usr/bin/killall"
-        killDock.arguments = ["Dock"]
-        killDock.launch()
-        killDock.waitUntilExit()
-        
-        // Restart cfprefsd to ensure settings are flushed
-        let killPrefs = Process()
-        killPrefs.launchPath = "/usr/bin/killall"
-        killPrefs.arguments = ["cfprefsd"]
-        killPrefs.launch()
-        killPrefs.waitUntilExit()
-        
-        checkStatus()
+        apply(gestureValue: 0, swipeNavigateWithScrolls: false)
     }
-    
+
     func restoreSettings() {
         print("SystemSettingsManager: Restoring trackpad settings...")
-        
-        let commands = [
-            ["write", "com.apple.AppleMultitouchTrackpad", "TrackpadThreeFingerVertSwipeGesture", "-int", "2"],
-            ["write", "com.apple.AppleMultitouchTrackpad", "TrackpadThreeFingerHorizSwipeGesture", "-int", "2"],
-            ["write", "com.apple.driver.AppleBluetoothMultitouch.trackpad", "TrackpadThreeFingerVertSwipeGesture", "-int", "2"],
-            ["write", "com.apple.driver.AppleBluetoothMultitouch.trackpad", "TrackpadThreeFingerHorizSwipeGesture", "-int", "2"],
-            ["-currentHost", "write", "NSGlobalDomain", "com.apple.trackpad.threeFingerVertSwipeGesture", "-int", "2"],
-            ["-currentHost", "write", "NSGlobalDomain", "com.apple.trackpad.threeFingerHorizSwipeGesture", "-int", "2"],
-            ["write", "NSGlobalDomain", "AppleEnableSwipeNavigateWithScrolls", "-bool", "true"]
-        ]
-        
-        for args in commands {
-            let p = Process()
-            p.launchPath = "/usr/bin/defaults"
-            p.arguments = args
-            p.launch()
-            p.waitUntilExit()
+        apply(gestureValue: 2, swipeNavigateWithScrolls: true)
+    }
+
+    private func apply(gestureValue: Int, swipeNavigateWithScrolls: Bool) {
+        let intValue = gestureValue as CFNumber
+
+        for domain in Self.perAppDomains {
+            for key in Self.perAppKeys {
+                CFPreferencesSetValue(
+                    key as CFString, intValue, domain as CFString,
+                    kCFPreferencesCurrentUser, kCFPreferencesAnyHost
+                )
+            }
+            CFPreferencesAppSynchronize(domain as CFString)
         }
-        
+
+        for key in Self.globalGestureKeys {
+            CFPreferencesSetValue(
+                key as CFString, intValue, Self.globalDomain,
+                kCFPreferencesCurrentUser, kCFPreferencesCurrentHost
+            )
+        }
+        CFPreferencesSynchronize(
+            Self.globalDomain, kCFPreferencesCurrentUser, kCFPreferencesCurrentHost
+        )
+
+        let boolValue: CFBoolean = swipeNavigateWithScrolls ? kCFBooleanTrue : kCFBooleanFalse
+        CFPreferencesSetValue(
+            "AppleEnableSwipeNavigateWithScrolls" as CFString,
+            boolValue,
+            Self.globalDomain,
+            kCFPreferencesCurrentUser, kCFPreferencesAnyHost
+        )
+        CFPreferencesAppSynchronize(Self.globalDomain)
+
+        // Trackpad driver re-reads these prefs after Dock is restarted.
         let killDock = Process()
         killDock.launchPath = "/usr/bin/killall"
         killDock.arguments = ["Dock"]
-        killDock.launch()
+        try? killDock.run()
         killDock.waitUntilExit()
-        
+
         checkStatus()
     }
 }

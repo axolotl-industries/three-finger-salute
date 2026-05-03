@@ -44,7 +44,7 @@ struct SettingsView: View {
                 Text("by Axolotl Industries")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                Text("Version 1.0.3")
+                Text("Version 1.1")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 
@@ -83,11 +83,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         GestureController.shared.start()
         setupStatusItem()
         setupSleepWakeObservers()
-        
-        NotificationCenter.default.addObserver(forName: NSNotification.Name("VolumeChanged"), object: nil, queue: .main) { notification in
-            if let volume = notification.object as? Float {
-                self.updateIcon(volume: volume)
-            }
+
+        VolumeManager.shared.onChange = { [weak self] volume, muted in
+            self?.updateIcon(volume: volume, muted: muted)
         }
     }
     
@@ -118,33 +116,30 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func setupSleepWakeObservers() {
-        let center = NSWorkspace.shared.notificationCenter
-        
-        center.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { _ in
+        // screensDidWake fires on every monitor wake, which is too aggressive
+        // for a full MT framework + event tap restart. didWake (system sleep)
+        // is the case where MT can actually go stale.
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
+        ) { _ in
             print("Three Finger Salute: System woke up, refreshing connections in 2 seconds...")
-            // Delay restart to ensure hardware is fully available
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
                 GestureController.shared.restart()
             }
-        }
-        
-        center.addObserver(forName: NSWorkspace.screensDidWakeNotification, object: nil, queue: .main) { _ in
-            print("Three Finger Salute: Screens woke up, ensuring connections...")
-            GestureController.shared.restart()
         }
     }
 
 
     private func setupStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        updateIcon(volume: VolumeManager.shared.getVolume())
+        updateIcon(volume: VolumeManager.shared.getVolume(), muted: VolumeManager.shared.isMuted())
         setupMenu()
     }
 
-    private func updateIcon(volume: Float) {
+    private func updateIcon(volume: Float, muted: Bool) {
         guard let button = statusItem?.button else { return }
-        let isMuted = volume == 0
-        let iconName = isMuted ? "speaker.slash.circle.fill" : "3.circle.fill"
+        let showMutedIcon = muted || volume == 0
+        let iconName = showMutedIcon ? "speaker.slash.circle.fill" : "3.circle.fill"
         button.image = NSImage(systemSymbolName: iconName, accessibilityDescription: "Three Finger Salute")
     }
 

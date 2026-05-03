@@ -1,0 +1,60 @@
+import AppKit
+import ObjectiveC
+
+// Bridge to Apple's private OSDUIHelper.framework so we can render the real
+// system volume HUD instead of a custom panel. Same approach used by
+// MonitorControl, MediaMate, BetterDisplay. All calls fail closed (no HUD)
+// if the symbols ever disappear in a future macOS release.
+final class SystemVolumeHUD {
+    static let shared = SystemVolumeHUD()
+
+    private static let speakerImage: Int64 = 3
+    private static let mutedImage: Int64 = 4
+    private static let totalChiclets: UInt32 = 16
+    private static let priority: UInt32 = 0x1F4
+    private static let msecUntilFade: UInt32 = 1000
+
+    private let osdManager: NSObject?
+    private let showSelector = NSSelectorFromString(
+        "showImage:onDisplayID:priority:msecUntilFade:filledChiclets:totalChiclets:locked:"
+    )
+
+    private init() {
+        _ = dlopen("/System/Library/PrivateFrameworks/OSDUIHelper.framework/OSDUIHelper", RTLD_LAZY)
+
+        guard let cls = NSClassFromString("OSDManager") else {
+            self.osdManager = nil
+            return
+        }
+        let sharedSelector = NSSelectorFromString("sharedManager")
+        guard let method = class_getClassMethod(cls, sharedSelector) else {
+            self.osdManager = nil
+            return
+        }
+        typealias SharedManagerFn = @convention(c) (AnyClass, Selector) -> AnyObject?
+        let getShared = unsafeBitCast(method_getImplementation(method), to: SharedManagerFn.self)
+        self.osdManager = getShared(cls, sharedSelector) as? NSObject
+    }
+
+    func show(volume: Float, muted: Bool) {
+        guard let osd = osdManager, osd.responds(to: showSelector) else { return }
+
+        let level = max(0, min(1, volume))
+        let image = muted ? Self.mutedImage : Self.speakerImage
+        let filled = muted ? UInt32(0) : UInt32(round(level * Float(Self.totalChiclets)))
+
+        typealias ShowFn = @convention(c) (
+            AnyObject, Selector,
+            Int64, CGDirectDisplayID,
+            UInt32, UInt32, UInt32, UInt32,
+            ObjCBool
+        ) -> Void
+        let imp = osd.method(for: showSelector)
+        let show = unsafeBitCast(imp, to: ShowFn.self)
+        show(osd, showSelector,
+             image, CGMainDisplayID(),
+             Self.priority, Self.msecUntilFade,
+             filled, Self.totalChiclets,
+             ObjCBool(false))
+    }
+}
