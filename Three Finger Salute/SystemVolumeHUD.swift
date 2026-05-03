@@ -1,10 +1,11 @@
 import AppKit
 import ObjectiveC
 
-// Bridge to Apple's private OSDUIHelper.framework so we can render the real
-// system volume HUD instead of a custom panel. Same approach used by
-// MonitorControl, MediaMate, BetterDisplay. All calls fail closed (no HUD)
-// if the symbols ever disappear in a future macOS release.
+// Bridge to Apple's private OSD framework so we can render the real system
+// volume HUD instead of a custom panel. Same approach used by MonitorControl,
+// MediaMate, BetterDisplay. The framework moved from OSDUIHelper.framework
+// to OSD.framework around macOS 14; we try the new path first and fall back
+// to the old one. All calls fail closed (no HUD) if the symbols ever go away.
 final class SystemVolumeHUD {
     static let shared = SystemVolumeHUD()
 
@@ -14,20 +15,29 @@ final class SystemVolumeHUD {
     private static let priority: UInt32 = 0x1F4
     private static let msecUntilFade: UInt32 = 1000
 
+    private static let frameworkPaths = [
+        "/System/Library/PrivateFrameworks/OSD.framework",
+        "/System/Library/PrivateFrameworks/OSDUIHelper.framework",
+    ]
+
     private let osdManager: NSObject?
     private let showSelector = NSSelectorFromString(
         "showImage:onDisplayID:priority:msecUntilFade:filledChiclets:totalChiclets:locked:"
     )
 
     private init() {
-        _ = dlopen("/System/Library/PrivateFrameworks/OSDUIHelper.framework/OSDUIHelper", RTLD_LAZY)
+        for path in Self.frameworkPaths {
+            if let bundle = Bundle(path: path), bundle.load() { break }
+        }
 
         guard let cls = NSClassFromString("OSDManager") else {
+            print("SystemVolumeHUD: OSDManager class not found")
             self.osdManager = nil
             return
         }
         let sharedSelector = NSSelectorFromString("sharedManager")
         guard let method = class_getClassMethod(cls, sharedSelector) else {
+            print("SystemVolumeHUD: +sharedManager not found")
             self.osdManager = nil
             return
         }

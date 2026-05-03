@@ -44,7 +44,7 @@ struct SettingsView: View {
                 Text("by Axolotl Industries")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                Text("Version 1.1")
+                Text("Version 1.1.1")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 
