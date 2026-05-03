@@ -25,6 +25,12 @@ final class SystemVolumeHUD {
         "showImage:onDisplayID:priority:msecUntilFade:filledChiclets:totalChiclets:locked:"
     )
 
+    // Dedupe by (chiclet count, muted) so a 60-120Hz gesture only fires an
+    // OSD XPC call when the visible state actually changes. Without this the
+    // HUD lags behind the gesture as redundant calls queue up in OSDUIHelper.
+    private var lastFilled: UInt32 = .max
+    private var lastMuted: Bool = false
+
     private init() {
         for path in Self.frameworkPaths {
             if let bundle = Bundle(path: path), bundle.load() { break }
@@ -52,6 +58,10 @@ final class SystemVolumeHUD {
         let level = max(0, min(1, volume))
         let image = muted ? Self.mutedImage : Self.speakerImage
         let filled = muted ? UInt32(0) : UInt32(round(level * Float(Self.totalChiclets)))
+
+        if filled == lastFilled && muted == lastMuted { return }
+        lastFilled = filled
+        lastMuted = muted
 
         typealias ShowFn = @convention(c) (
             AnyObject, Selector,
