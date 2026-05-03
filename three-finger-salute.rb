@@ -1,6 +1,6 @@
 cask "three-finger-salute" do
-  version "1.1.1"
-  sha256 "76f7a18c3120af595c27e70a899251b7646e5b55c4e6fb5502c78785da2dcb0d"
+  version "1.1.2"
+  sha256 "550b1dd6b19c14f4d627c38822337f315fa78eacbbc871167b453fa254f0e586"
 
   url "https://github.com/axolotl-industries/three-finger-salute/releases/download/v#{version}/ThreeFingerSalute.zip"
   name "Three Finger Salute"
